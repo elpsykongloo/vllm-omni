@@ -16,6 +16,8 @@ import torch
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
+from vllm_omni.utils.audio import mel_filter_bank
+
 SAMPLE_RATE_HZ = 16_000
 WINDOW_MS = 400
 WINDOW_SAMPLES = SAMPLE_RATE_HZ * WINDOW_MS // 1_000
@@ -29,12 +31,9 @@ RIGHT_PADDING_SAMPLES = 479
 def _cpu_mel_filter_bank(n_mels: int) -> torch.Tensor:
     if n_mels not in (80, 128):
         raise ValueError(f"Lychee-FD supports 80 or 128 mel bins, got {n_mels}")
-    from librosa.filters import mel  # noqa: TID251 - preserve released Mel filter arithmetic
-
-    # The released preprocessor uses librosa's NumPy-built Slaney bank.
-    # Torchaudio's equivalent convention rounds a few entries differently,
-    # which changes BF16 Mel inputs and propagates through the encoder.
-    return torch.from_numpy(mel(sr=SAMPLE_RATE_HZ, n_fft=N_FFT, n_mels=n_mels)).contiguous()
+    # Preserve the released frontend's Slaney scale and area normalization
+    # through the shared runtime helper; exact cross-library rounding may vary.
+    return mel_filter_bank(sr=SAMPLE_RATE_HZ, n_fft=N_FFT, n_mels=n_mels).contiguous()
 
 
 @lru_cache(maxsize=1)
